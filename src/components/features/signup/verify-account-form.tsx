@@ -7,6 +7,7 @@ import { useForm } from "react-hook-form";
 import { toast } from "sonner";
 import { z } from "zod";
 import { AlertCircle } from "lucide-react";
+import { useRouter } from "next/navigation";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -43,10 +44,14 @@ const CustomMailIcon = (props: React.SVGProps<SVGSVGElement>) => (
 );
 
 export const VerifyAccountForm = () => {
+  const router = useRouter();
+
   const [isOtpIncorrect, setIsOtpIncorrect] = useState(false);
 
   const searchParams = useSearchParams();
-  const email = searchParams.get("email") || "";
+  const storedEmail =
+    typeof window !== "undefined" ? localStorage.getItem("pendingEmail") : null;
+  const email = searchParams.get("email") || storedEmail || "";
 
   const username = email.split("@")[0];
   const lastThreeChars = username.length > 3 ? username.slice(-3) : username;
@@ -59,16 +64,38 @@ export const VerifyAccountForm = () => {
     },
   });
 
-  function onSubmit(data: z.infer<typeof VerifyAccountFormSchema>) {
-    const CORRECT_OTP = "123456";
+  async function onSubmit(data: z.infer<typeof VerifyAccountFormSchema>) {
+    try {
+      setIsOtpIncorrect(false);
 
-    if (data.code !== CORRECT_OTP) {
-      setIsOtpIncorrect(true);
-      return;
+      console.log("Verifying with email:", email, "OTP:", data.code);
+
+      const response = await fetch(
+        "https://naija-nutri-hub.azurewebsites.net/verify",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            email: email,
+            otp: data.code,
+          }),
+        },
+      );
+
+      const result = await response.json();
+
+      if (response.ok) {
+        toast.success("Account verified successfully!");
+        router.push("/login");
+      } else {
+        console.error(result);
+        setIsOtpIncorrect(true);
+        toast.error(result.message || "Invalid or expired OTP.");
+      }
+    } catch (error) {
+      console.error("Verification error:", error);
+      toast.error("Something went wrong. Please try again.");
     }
-
-    setIsOtpIncorrect(false);
-    toast.success("Account verified successfully!");
   }
 
   return (
